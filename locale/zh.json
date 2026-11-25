@@ -1,0 +1,17 @@
+{
+  "meta": {
+    "title": "渠道守卫",
+    "description": "一键检查并修复 DSH 各渠道「模型无法使用」的问题：system 文本指纹、user-agent 拦截、失效的请求头，并如实报告哪些需要你手工处理。"
+  },
+  "action": {
+    "diagnose": "体检",
+    "repair": "一键修复",
+    "report": "查看报告"
+  },
+  "state": {
+    "ok": "可用",
+    "auto": "可自动修复",
+    "manual": "需你处理",
+    "giveUp": "上游限制，修不了"
+  }
+}

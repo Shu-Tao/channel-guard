@@ -1,0 +1,14 @@
+# channel-guard bundle patch
+#
+# 用 `- insert:` 新增 loader 行，避免顶层 id-target 覆盖在单独装载时报
+# `patch: entry "channel-guard" not found`。
+- insert:
+    - id: channel-guard
+      name: 'channel-guard'
+      config:
+        # 第 1 层：按内容改写 system 文本指纹（不依赖 provider，零风险）
+        buddySystem: true
+        # 第 2 层：自建 codearts adapter 接管路由（默认关，验证后再开）
+        codeartsAdapter: false
+        # 第 3 层：诊断工具
+        diagnose: true

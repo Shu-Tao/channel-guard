@@ -1,0 +1,17 @@
+{
+  "meta": {
+    "title": "Channel Guard",
+    "description": "Check and auto-repair DSH channel failures: system-prompt fingerprints, user-agent blocks, and stale request headers — and honestly report what needs your hand."
+  },
+  "action": {
+    "diagnose": "Diagnose",
+    "repair": "Auto-repair",
+    "report": "Report"
+  },
+  "state": {
+    "ok": "OK",
+    "auto": "Auto-fixable",
+    "manual": "Needs you",
+    "giveUp": "Upstream limit"
+  }
+}

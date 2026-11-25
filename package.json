@@ -1,0 +1,50 @@
+{
+  "name": "channel-guard",
+  "version": "0.1.0",
+  "type": "module",
+  "description": "DeepSeek Harness 渠道守卫：自动诊断并修复各模型渠道「无法使用」的问题（system 文本指纹、user-agent 拦截、失效请求头），并如实报告需要人工处理的部分。",
+  "main": "./index.js",
+  "exports": {
+    ".": "./index.js",
+    "./package.json": "./package.json",
+    "./locale/*.json": "./locale/*.json"
+  },
+  "files": [
+    "index.js",
+    "lib",
+    "locale",
+    "docs",
+    "cordis.patch.yml",
+    "README.md",
+    "LICENSE",
+    "test"
+  ],
+  "scripts": {
+    "test": "node test/offline-check.mjs"
+  },
+  "engines": {
+    "node": ">=20"
+  },
+  "dsh": {
+    "bundle": {
+      "patch": "./cordis.patch.yml"
+    }
+  },
+  "keywords": [
+    "dsh",
+    "dsh-plugin",
+    "deepseek-harness",
+    "channel",
+    "diagnose",
+    "repair"
+  ],
+  "license": "MIT",
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/Shu-Tao/channel-guard.git"
+  },
+  "homepage": "https://github.com/Shu-Tao/channel-guard#readme",
+  "bugs": {
+    "url": "https://github.com/Shu-Tao/channel-guard/issues"
+  }
+}
