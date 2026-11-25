@@ -98,6 +98,7 @@ const fetchImpl = (input, init) => (options.fetchImpl ?? globalThis.fetch)(input
 且不改任何 vendor 文件。插件只对 `snap-access.cn-north-4.myhuaweicloud.com`
 这一个主机生效，其他域名原样转发。
 
+
 ## 架构
 
 ```
@@ -164,6 +165,76 @@ cd "D:/DeepSeek Harness/projects/channel-guard"
 经守卫后: 200 {"id":"as-…",…}                     ← 证明修好了
 ```
 
+## 出问题时怎么办
+
+### 先跑自检
+
+```bash
+NODE="C:/Users/25759/.dsh/dsh-runtimes/dsh-primary-runtime/dependencies/node/bin/node.exe"
+"$NODE" "D:/DeepSeek Harness/projects/dsh-buddy-fix/scripts/selfcheck.mjs"
+```
+
+8 项检查会指出具体哪一步没做对（装错位置、软链接、bundles 没注册、源没部署、层被关等）。
+每天 09:00 也有定时任务自动跑一次。
+
+### 应急回退到补丁方案
+
+如果插件本身出问题，可以临时回退。**配套工具在 `D:\DeepSeek Harness\projects\dsh-buddy-fix`**。
+
+```bash
+# 1. 先停插件（避免两套修复打架，否则难排查）
+#    把 cordis.patch.yml 里 buddySystem / codeartsFetch 改成 false，或禁用 include:channel-guard
+
+# 2. 再打补丁（顺序：buddy → UA → benefit）
+cd "D:/DeepSeek Harness/projects/dsh-buddy-fix"
+"$NODE" scripts/patch-pack.mjs --apply
+"$NODE" scripts/patch-codearts-ua.mjs --apply
+"$NODE" scripts/patch-codearts-benefit.mjs --apply
+
+# 3. 回滚
+copy /Y "...\vendor\channel-pack\pack.js.orig" "...\vendor\channel-pack\pack.js"
+```
+
+补丁方案的缺点：改的是 vendored 文件，`pnpm` 重装或插件升级会覆盖。
+所以它只适合临时救急。
+
+### 排查上游又改了什么
+
+被拦的请求不扣 token，这条路很便宜。
+
+```bash
+cd "D:/DeepSeek Harness/projects/dsh-buddy-fix"
+"$NODE" scripts/extract-system-prompt.mjs <会话日志> logs/system-prompt.txt   # 解出完整 system 文本
+"$NODE" scripts/replay-upstream.mjs logs/system-prompt.txt                     # 原文本 vs 改写后 A/B 对照
+"$NODE" scripts/diagnose-channels.mjs                                          # 全渠道看谁坏了
+```
+
+方法论：**先绕过插件直连上游**（通不通决定问题在哪一层），再**逐个请求头做隔离**
+（一次只改一个变量），最后对可疑的头做**句式矩阵**（原样 / 改大小写 / 换分隔符 / 调顺序 / 加前导空白）。
+
+## 三个容易踩的坑
+
+这三个都是我在自己机器上踩过的，写在这里避免重复：
+
+### 1. 装了但不加载
+
+`pnpm add` 只写 `dependencies`，**不写 `dsh.profile.bundles`**。
+缺这一步，插件文件在、什么都不报，但永远不会被加载。
+
+### 2. 软链接永远不激活
+
+`link:` 装出来是 symlink，DSH 加载器**不跟随**。
+表现为 `plugin_manager` 里 `enabled: true` 但 `fiberPhase: null`。
+
+我第一次测 buddy 时它返回 400，差点以为是改写逻辑有 bug，实际是插件根本没被实例化。
+必须用实体目录。
+
+### 3. 改 header 破坏了签名
+
+`maas_type` 参与华为云 SIG-V11 签名（`signedHeaders` 里包含它）。
+只删 header 会得到 **401**（`verify ak sk signature fail`），比原来的 404 更难排查。
+必须重算 Authorization。
+
 ## 已知限制
 
 - **需要重新登录的渠道只能报告**：凭据过期、账户级 403 需要你到对应平台登录
@@ -171,6 +242,22 @@ cd "D:/DeepSeek Harness/projects/channel-guard"
 - **上游政策变更**：`our-free-model` 免费额度已关闭，`ccswitch` 有客户端白名单，都不尝试绕过
 - **codearts 首次请求较慢**：要读凭据并重签，之后同上
 - 上游可能再改策略；本插件针对 2026-11 的行为
+
+## 历史脉络
+
+这个插件是几次踩坑的产物，理解过程有助于排查类似问题：
+
+1. **buddy 400** —— 上游按 system 文本指纹拒绝。先写补丁改 `pack.js`，验证通过。
+2. **发现社区插件是空操作** —— `dsh-buddy-guard@0.1.2` 靠 `variables.provider` 判断渠道，
+   但 DSH 44.7.0 的 `AssembleContext` 没有这个字段，于是 provider 恒为空、原样返回。
+   插件加载正常、日志正常、**请求一个字节都没变**。
+3. **codearts「API 密钥无效」是假线索** —— 那是 DSH 宿主对 `AUTH` 的固定文案。
+   直连上游三个账户全 200，逐个隔离请求头后才发现两个真凶（UA 句式、benefit 头）。
+4. **注册 adapter 被堵死** —— `prepareRoutes` 对已注册 provider 直接抛 `DUPLICATE_ADAPTER`。
+   改走 fetch 层。
+5. **`pack.js` 还原纯净** —— 插件独立撑住两个渠道，不再需要任何 vendor 补丁。
+
+---
 
 ## 许可
 
