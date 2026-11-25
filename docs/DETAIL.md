@@ -134,11 +134,11 @@ adapter 是结构化验证（调方法，不做 `instanceof`），`our-free-mode
 ## 验证
 
 ```bash
-NODE="C:/Users/25759/.dsh/dsh-runtimes/dsh-primary-runtime/dependencies/node/bin/node.exe"
-cd "D:/DeepSeek Harness/projects/channel-guard"
+cd channel-guard
 
-# 离线验证核心逻辑（39 项断言）
-"$NODE" test/offline-check.mjs
+# 离线验证核心逻辑（自带 fixture，不依赖本机文件）
+node test/offline-check.mjs            # 47 项
+node test/codearts-guard-check.mjs     # 19 项
 ```
 
 离线检查覆盖：真实 38KB prompt 的改写、幂等性、assembly 不可变性、
@@ -146,10 +146,13 @@ cd "D:/DeepSeek Harness/projects/channel-guard"
 
 ## 安装
 
-```bash
-cd "C:/Users/25759/.dsh/profiles/desktop"
-"NODE" ".../pnpm/bin/pnpm.cjs" add "link:D:/DeepSeek Harness/projects/channel-guard"
-```
+见 [README](../README.md#安装) 的三步流程。要点重复一次：
+
+1. 插件目录必须是**实体目录**放进 `<profile>/node_modules/channel-guard`
+   （软链接会导致加载器不跟随，`fiberPhase` 永远为 null）
+2. 必须手动把 `"channel-guard"` 加进 `<profile>/package.json` 的 `dsh.profile.bundles`
+   （包管理器不写这里，漏了会静默不加载）
+3. 重载后确认 `fiberPhase === 'active'`
 
 装完**必须**把 `channel-guard` 加入 `package.json` 的 `dsh.profile.bundles` 数组。
 `pnpm add` 只写 `dependencies`，不写 bundles —— 缺这一步会出现

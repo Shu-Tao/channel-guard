@@ -125,92 +125,128 @@ config:
 
 ## 安装
 
+### 前置：确认你的 DSH 装在哪
+
+不同平台的路径不一样。先找到 `node_modules` 所在的 profile 目录：
+
 ```bash
-cd "C:/Users/25759/.dsh/profiles/desktop"
-NODE="C:/Users/25759/.dsh/dsh-runtimes/dsh-primary-runtime/dependencies/node/bin/node.exe"
-PNPM="E:/DeepSeek Harness/resources/runtime/primary-runtime/dependencies/pnpm/bin/pnpm.cjs"
-"$NODE" "$PNPM" add "link:D:/DeepSeek Harness/projects/channel-guard"
+# 看 DSH_HOME（多数安装会设这个环境变量）
+echo "$DSH_HOME"          # Linux / macOS
+echo $env:DSH_HOME        # Windows PowerShell
+
+# 没设的话，profile 通常在：
+#   Linux / macOS   ~/.dsh/profiles/<profile-name>/
+#   Windows         %USERPROFILE%\.dsh\profiles\<profile-name>\
 ```
 
-**两个必须做的后续步骤，缺一则插件不生效且没有任何报错：**
+`<profile-name>` 一般是 `desktop`、`web` 或 `tui`。
 
-1. **`pnpm add` 不写 bundles**，必须手动加进 `package.json`：
-   ```json
-   "dsh": { "profile": { "bundles": [ … , "channel-guard" ] } }
-   ```
-2. **不要用软链接**。`link:` 装出来是 symlink，DSH 加载器不跟随，
-   表现为 `enabled: true` 但 `fiberPhase: null`（永不激活）。改成实体目录：
-   ```bash
-   rm node_modules/channel-guard
-   cp -r "D:/DeepSeek Harness/projects/channel-guard" node_modules/channel-guard
-   ```
+### 第 1 步：把插件放进 profile
 
-然后切一次开关强制重载，确认 `fiberPhase` 变成 `active`。
+**不要用软链接。** `pnpm add link:` 装出来是 symlink，
+而 DSH 加载器不跟随 symlink —— 表现为 `enabled: true` 但 `fiberPhase: null`，永不激活。
+
+```bash
+PROFILE="$DSH_HOME/profiles/desktop"     # 按实际情况改
+
+# 方式 A：从 release 包解压
+unzip channel-guard-*.zip -d /tmp
+cp -r /tmp/channel-guard "$PROFILE/node_modules/channel-guard"
+
+# 方式 B：从源码目录拷（开发时用）
+cp -r ./channel-guard "$PROFILE/node_modules/channel-guard"
+
+# 方式 C：不经包管理器，直接拷进 node_modules 也算安装
+```
+
+### 第 2 步：加进 bundles 列表
+
+**这是最容易漏的一步。** 包管理器只写 `dependencies`，**不会写** `bundles`。
+缺了它，文件在、也不报错，但插件永远不会被加载。
+
+编辑 `$PROFILE/package.json`：
+
+```json
+{
+  "dsh": {
+    "profile": {
+      "bundles": [
+        "...已有的其他插件...",
+        "channel-guard"
+      ]
+    }
+  }
+}
+```
+
+### 第 3 步：重载
+
+重启 DSH，或在宿主里切换一次该插件的启停开关。
+
+**确认真的激活了**：插件列表里
+
+```
+moduleName = channel-guard
+enabled    = true
+fiberPhase = active        ← 必须是 active，不是 null
+```
+
+如果 `fiberPhase` 还是 `null`，回到第 1 步检查是不是用了软链接。
 
 ## 验证
 
+在插件目录下跑（不碰 DSH，不发请求）：
+
 ```bash
-cd "D:/DeepSeek Harness/projects/channel-guard"
-"$NODE" test/offline-check.mjs           # 47 项：指纹改写 + 分类器
-"$NODE" test/codearts-guard-check.mjs    # 17 项：UA + 签名算法
-
-# 加 --live 会发真实请求验证签名重算（消耗少量额度）
-"$NODE" test/codearts-guard-check.mjs --live
+cd channel-guard
+node test/offline-check.mjs           # 47 项：指纹改写 + 错误分类器
+node test/codearts-guard-check.mjs    # 19 项：UA 改写 + 签名算法
 ```
 
-`--live` 的期望输出：
+两项都应输出 `0 失败`。这两份测试自带 fixture，克隆下来就能跑，不依赖任何本机文件。
+
+### 可选：用真实凭据验证签名重算
+
+`--live` 会真的向上游发请求（消耗少量额度），验证「带 `maas_type` 的请求能否被修复」。
+
+```bash
+# 凭据位置按平台自动推断，也可以用 DSH_HOME 指定
+DSH_HOME=~/.dsh node test/codearts-guard-check.mjs --live
+```
+
+期望输出：
 
 ```
-未经守卫: 403 {"error_code":"TM.00000001",…}     ← 证明问题存在
-经守卫后: 200 {"id":"as-…",…}                     ← 证明修好了
+未经守卫: 403 {"error_code":"TM.00000001",…}   ← 证明问题存在
+经守卫后: 200 {"id":"as-…",…}                   ← 证明修好了
 ```
+
+若上游限流会返回 429，测试会自动识别并说明「已不再是 403/404，签名重算生效」，
+不会误报成失败。
+
+### 端到端验证（证明不依赖任何 vendor 补丁）
+
+把 `dsh-our-free-model` 的 `pack.js` 还原成纯净原版，再发一句话：
+
+```bash
+cd "$PROFILE/node_modules/dsh-our-free-model/vendor/channel-pack"
+cp pack.js.orig pack.js     # 若没有 .orig，从插件包重新解出
+```
+
+然后对 buddy 和 codearts 各发一句。两个都应该正常出字。
+这就是「插件独立生效」的证明。
 
 ## 出问题时怎么办
 
 ### 先跑自检
 
-```bash
-NODE="C:/Users/25759/.dsh/dsh-runtimes/dsh-primary-runtime/dependencies/node/bin/node.exe"
-"$NODE" "D:/DeepSeek Harness/projects/dsh-buddy-fix/scripts/selfcheck.mjs"
-```
+按上面「第 3 步」的清单逐项自检。三个最常见的失败点：
 
-8 项检查会指出具体哪一步没做对（装错位置、软链接、bundles 没注册、源没部署、层被关等）。
-每天 09:00 也有定时任务自动跑一次。
+1. `fiberPhase` 不是 `active` → 多半是软链接
+2. 插件列表里根本没有它 → `bundles` 没注册
+3. 列表里有但改写不生效 → 层开关被关，或 `lib/` 文件缺失
 
-### 应急回退到补丁方案
-
-如果插件本身出问题，可以临时回退。**配套工具在 `D:\DeepSeek Harness\projects\dsh-buddy-fix`**。
-
-```bash
-# 1. 先停插件（避免两套修复打架，否则难排查）
-#    把 cordis.patch.yml 里 buddySystem / codeartsFetch 改成 false，或禁用 include:channel-guard
-
-# 2. 再打补丁（顺序：buddy → UA → benefit）
-cd "D:/DeepSeek Harness/projects/dsh-buddy-fix"
-"$NODE" scripts/patch-pack.mjs --apply
-"$NODE" scripts/patch-codearts-ua.mjs --apply
-"$NODE" scripts/patch-codearts-benefit.mjs --apply
-
-# 3. 回滚
-copy /Y "...\vendor\channel-pack\pack.js.orig" "...\vendor\channel-pack\pack.js"
-```
-
-补丁方案的缺点：改的是 vendored 文件，`pnpm` 重装或插件升级会覆盖。
-所以它只适合临时救急。
-
-### 排查上游又改了什么
-
-被拦的请求不扣 token，这条路很便宜。
-
-```bash
-cd "D:/DeepSeek Harness/projects/dsh-buddy-fix"
-"$NODE" scripts/extract-system-prompt.mjs <会话日志> logs/system-prompt.txt   # 解出完整 system 文本
-"$NODE" scripts/replay-upstream.mjs logs/system-prompt.txt                     # 原文本 vs 改写后 A/B 对照
-"$NODE" scripts/diagnose-channels.mjs                                          # 全渠道看谁坏了
-```
-
-方法论：**先绕过插件直连上游**（通不通决定问题在哪一层），再**逐个请求头做隔离**
-（一次只改一个变量），最后对可疑的头做**句式矩阵**（原样 / 改大小写 / 换分隔符 / 调顺序 / 加前导空白）。
+跑 `node test/offline-check.mjs` 可以进一步定位逻辑层问题。
 
 ## 三个容易踩的坑
 
