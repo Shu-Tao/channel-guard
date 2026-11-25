@@ -1,8 +1,8 @@
 {
   "name": "channel-guard",
-  "version": "0.1.0",
+  "version": "0.2.0",
   "type": "module",
-  "description": "DeepSeek Harness 渠道守卫：自动诊断并修复各模型渠道「无法使用」的问题（system 文本指纹、user-agent 拦截、失效请求头），并如实报告需要人工处理的部分。",
+  "description": "DeepSeek Harness 渠道守卫：自动修复模型渠道「无法使用」——buddy 的 system 文本指纹、codearts 的 user-agent 拦截与失效请求头（含华为云签名重算），并如实诊断报告需要人工处理的部分。",
   "main": "./index.js",
   "exports": {
     ".": "./index.js",
@@ -20,7 +20,8 @@
     "test"
   ],
   "scripts": {
-    "test": "node test/offline-check.mjs"
+    "test": "node test/offline-check.mjs && node test/codearts-guard-check.mjs",
+    "test:live": "node test/codearts-guard-check.mjs --live"
   },
   "engines": {
     "node": ">=20"

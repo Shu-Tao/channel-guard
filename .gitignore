@@ -16,3 +16,6 @@ Thumbs.db
 # 本地测试夹具（可能含真实会话内容，不入库）
 fixtures/
 *.fixture.txt
+
+# 打包产物（放 build/，不入库）
+build/

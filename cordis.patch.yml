@@ -8,7 +8,9 @@
       config:
         # 第 1 层：按内容改写 system 文本指纹（不依赖 provider，零风险）
         buddySystem: true
-        # 第 2 层：自建 codearts adapter 接管路由（默认关，验证后再开）
-        codeartsAdapter: false
-        # 第 3 层：诊断工具
+        # 第 2 层：fetch 层修正 codearts 请求（UA 改写 + 去 benefit 头 + 重签名）
+        codeartsFetch: true
+        # 第 3 层：诊断服务
         diagnose: true
+        # 打开后会把每次改写写进日志，排查时用
+        debug: false
